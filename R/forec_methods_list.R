@@ -16,7 +16,7 @@ forec_methods <- function() {
   methods_list <- append(methods_list, "snaive_forec")
   methods_list
 }
-
+#test
 #' @describeIn forec_methods forecast::snaive
 #' @param x A \code{ts} object with the input time series
 #' @param h The amount of future time steps to forecast
