@@ -1,433 +1,383 @@
-
-##
-# put here everything to check in the datasets
-# same number of methods, and ids of them
-# errors
-# fields of the list, etc
-sanity_check_function <- function() {
-
-}
-
-
-#squared loss
-combi_forec_square_obj <- function(preds, dtrain) {
-
-  ff <- attr(dtrain, "ff")
-  xx <- attr(dtrain, "xx")
-  ew <- attr(dtrain, "ew")
-
-  SE <-  ew*(rowSums(preds * ff) - xx)
-  grad <- 2*ew *ff* SE
-  hess <- 2* ew*ew*ff * ff
-
-  print(mean(abs(SE)))
-  return(list(grad = t(grad), hess = t(hess)))
-}
-
-combi_softmax_square <- function(preds, dtrain) {
-  ff <- attr(dtrain, "ff")
-  xx <- attr(dtrain, "xx")
-  ew <- attr(dtrain, "ew")
-
-  preds <- exp(preds)
-  sp <- rowSums(preds)
-  preds <- preds / replicate(ncol(preds), sp)
-
-  S <- rowSums(preds * ff)
-  Sxx <- ew*(S - xx)
-  GradSxx <- ew*preds*(ff - S)
-  grad <- 2*Sxx*GradSxx #derivative of squaredSxx
-  hess <- 2* GradSxx*( GradSxx + Sxx*(1.0 - 2.0*preds))
-
-  return(list(grad = t(grad), hess = t(hess)))
-}
-
-sgm <- function(x) {
-  1.0 / (1.0 + exp(-x))
-}
-
-
-sigmoid_clamp = function(x) {
-  x <- pmax(pmin(x, 9), -9)
-  1.0 / (1.0 + exp(-x))
-}
-
-smooth_sign <- function(x) {
-  2.0 * sigmoid_clamp(x) - 1
-}
-
-
-combi_forec_absolute_obj <- function(preds, dtrain) {
-
-  ff <- attr(dtrain, "ff")
-  xx <- attr(dtrain, "xx")
-  ew <- attr(dtrain, "ew")
-
-  SE <-  ew*(rowSums(preds * ff) - xx)
-  SS <- smooth_sign(SE)
-  grad <- ew*SS*ff
-  hess <- ew*ff * 2*sigmoid_clamp(SE)*(1-sigmoid_clamp(SE))*ff*ew
-
-  return(list(grad = t(grad), hess = t(hess)))
-}
-
-
-DEPRECATED_old_combi_softmax_abs <- function(preds, dtrain) {
-  ff <- attr(dtrain, "ff")
-  xx <- attr(dtrain, "xx")
-  ew <- attr(dtrain, "ew")
-
-  preds <- exp(preds)
-  sp <- rowSums(preds)
-  preds <- preds / replicate(ncol(preds), sp)
-
-  S <- rowSums(preds * ff)
-  Sxx <-  ew*(S - xx)
-  GradSxx <- ew*(preds*(ff - S))
-  grad = smooth_sign(Sxx)*GradSxx
-  hess = 2*sigmoid_clamp(Sxx)*(1-sigmoid_clamp(Sxx))*GradSxx #+
-   #0* smooth_sign(Sxx)*ew*(ff - preds*(ff-0*S))
-
-  print( mean(abs(Sxx)))
-
-  return(list(grad = t(grad), hess = t(hess)))
-}
-
-combi_softmax_abs <- function(preds, dtrain) {
-  ff <- attr(dtrain, "ff")
-  xx <- attr(dtrain, "xx")
-  ew <- attr(dtrain, "ew")
-  #lambda <- attr(dtrain, "lambda")
-
-  a = preds
-
-  preds <- exp(preds)
-  sp <- rowSums(preds)
-  preds <- preds / replicate(ncol(preds), sp)
-
-  S <- rowSums(preds * ff)
-  Sxx <-  ew*(S - xx)
-  GradSxx <- ew*(preds*(ff - S))
-  grad = smooth_sign( Sxx )*GradSxx
-  HesSxx = ew*( preds*(1-preds)*ff - preds*(1-preds)*S - preds*GradSxx/ew)
-
-  hess = 2 * sigmoid_clamp(Sxx)*(1 - sigmoid_clamp(Sxx))*GradSxx*GradSxx +
-    smooth_sign(Sxx)*( HesSxx)
-  hess = pmax(hess, 1e-16)
-  #hess[(hess > -1e-13) & (hess < 0)] <- -1e-13
-  #hess[(hess < 1e-16) ] <- 1e-16
-
-
-  #print( mean(abs(Sxx)))
-
-  return(list(grad = t(grad), hess = t(hess)))
-}
-
-
-#' @export
-combi_softmax_owi <- function(preds, dtrain) {
-  ff <- attr(dtrain, "ff")
-  xx <- attr(dtrain, "xx")
-  ew <- attr(dtrain, "ew")
-  eh <- attr(dtrain, "eh")
-  avg_mase <- attr(dtrain, "avg_mase")
-  avg_smape <- attr(dtrain, "avg_smape")
-
-  preds <- exp(preds)
-  sp <- rowSums(preds)
-  preds <- preds / replicate(ncol(preds), sp)
-
-  S <- rowSums(preds * ff)
-  Sxx <-  (S - xx)
-  GradSxx = preds*(ff - S)
-  D = abs(xx) + abs(S)
-  GradD = GradSxx   #smooth_sign(S)* GradSxx #always positive
-
-  gradMASE = smooth_sign( Sxx )*GradSxx
-  gradSMAPE =  (gradMASE * D  - abs(Sxx)*GradD) / D^2
-
-  HesSxx = GradSxx*(1 - 2*preds)
-  #note, S could alway be positive, and maybe the derivative could be set to 1 instead of sigmooth_sign
-  #the second derivative to 0 instead of sclamp(1-sclamp)
-  HesD = HesSxx
-
-  hessMASE = 2 * sigmoid_clamp(Sxx)*(1 - sigmoid_clamp(Sxx))*GradSxx*GradSxx +
-    smooth_sign(Sxx)*( HesSxx)
-
-
-  hterm1= (hessMASE*D - smooth_sign(Sxx)*GradSxx*GradD) / D^2
-
-  ht2 = smooth_sign(Sxx)*GradSxx*GradD + abs(Sxx)*HesD
-
-  hterm2 = - ( ht2*D^2 - abs(Sxx)*GradD*2*D*GradD) / D^4
-
-
-  hessSMAPE = hterm1 + hterm2
-
-  grad = 0.5*(ew*gradMASE / avg_mase + eh*gradSMAPE/avg_smape)
-  hess = 0.5*(ew*hessMASE / avg_mase + eh*hessSMAPE/avg_smape)
-
-  hess <- pmax(hess, 1e-16)
-  return(list(grad = t(grad), hess = t(hess)))
-}
-
-
-
-
-fair_obj <- function(preds, dtrain) {
-  ff <- attr(dtrain, "ff")
-  labels <- attr(dtrain, "xx")
-  c <- 2  #the lower the "slower/smoother" the loss is. Cross-Validate.
-  x <-  rowSums(preds * ff)-labels
-  grad <- ff * (c*x / (abs(x)+c))
-  hess <- ff*ff*(c^2 / (abs(x)+c)^2)
-  print(sum(abs(x)))
-  return(list(grad = grad, hess = hess))
-}
-
-ln_cosh_obj <- function(preds, dtrain) {
-  ff <- attr(dtrain, "ff")
-  labels <- attr(dtrain, "xx")
-  ew <- attr(dtrain, "ew")
-  norm <- abs(mean(labels))
-  x <- (rowSums(preds * ff) - labels) * ew
-  grad <- tanh(x)*ff
-  hess <- ff*(1-tanh(x)^2)*ff
-  print(sum(abs(x)))
-  return(list(grad = grad, hess = hess))
-}
-
-#this function calculates all the parts that can be
-#taken outside of the gradient-hess calculation,
-#and added later as a multiplication:
-#normalizing via the horizon steps, the denom in the mase, calc, etc..
-calc_external_weight <- function(insample, h) {
-  frq <- stats::frequency(insample)
-  forecastsNaiveSD <- rep(NA,frq)
-  for (j in (frq+1):length(insample)){
-    forecastsNaiveSD <- c(forecastsNaiveSD, insample[j-frq])
+check_customxgboost_version <- function() {
+  #check if the custom xgboost version is installed
+  if ( !requireNamespace("xgboost", quietly = TRUE)
+       || (utils::packageVersion("xgboost") != '666.6.4.1') ) {
+    warning("Xgboost CUSTOM version is required!")
+    warning("Installing it from github pmontman/customxgboost")
+    devtools::install_github("pmontman/customxgboost")
   }
-  masep<-mean(abs(insample-forecastsNaiveSD),na.rm = TRUE)
-  c( 1 / (masep *h ), 1/h)
 }
 
+# FIX FOR THE CUSTOM MULTICLASS OBJECTIVE : https://github.com/dmlc/xgboost/issues/2776
 
+
+
+#' Softmax Transform
+#' @param x A numeric vector.
 #' @export
-create_combi_info <- function(dataset) {
-  #transform the dataset into matrix format
-  #with one forecast horizon per row, that will be properly weighted
-  #instead of one series per row, to simplify the objective function
-  forec_true_w <- lapply(dataset, function (seriesentry) {
-    external_weight <- calc_external_weight(seriesentry$x, seriesentry$h)
-    t(sapply(1:seriesentry$h, function(i) {
-      c(t(seriesentry$ff[, i]), seriesentry$xx[i], external_weight)
-    }))
-  })
-  forec_true_w <- do.call(rbind, forec_true_w)
+softmax_transform <- function(x) {
+  exp(x) / sum(exp(x))
+}
 
-  data <- lapply(dataset, function (lentry) {
-    seriesdata <- t(replicate(lentry$h,
-                              as.numeric(lentry$features)))
-    colnames(seriesdata) <- names(lentry$features)
-    seriesdata
-  })
-  data <- do.call(rbind, data)
+# user defined objective function for xgboost
+# minimizes de class probabilities * owi_errors
+#' @export
+error_softmax_obj <- function(preds, dtrain) {
+  labels <- xgboost::getinfo(dtrain, "label")
+  errors <- attr(dtrain, "errors")
 
-  ff <- forec_true_w[, 1:nrow(dataset[[1]]$ff)]
-  xx <- forec_true_w[, nrow(dataset[[1]]$ff) + 1]
-  ew <- forec_true_w[, ncol(forec_true_w) - 1]
-  eh <- forec_true_w[, ncol(forec_true_w) ]
-  list(data=data, ff=ff, xx=xx, ew=ew, eh=eh)
+  preds <- exp(preds)
+  sp <- rowSums(preds)
+  preds <- preds / replicate(ncol(preds), sp)
+  rowsumerrors <- replicate( ncol(preds), rowSums(preds * errors))
+
+  grad <- preds*(errors - rowsumerrors)
+  hess <- errors*preds*(1.0-preds) - grad*preds
+  #hess <- grad*(1.0 - 2.0*preds)
+  #hess <- pmax(hess, 1e-16)
+  #the true hessian should be grad*(1.0 - 2.0*preds) but it produces numerical problems
+  #what we use here is a upper bound
+
+  #print(mean(rowSums(preds*errors)))
+  return(list(grad = t(grad), hess = t(hess)))
 }
 
 
 
-train_combination_ensemble <- function(dataset, params=NULL) {
+#prepare the time series dataset with extracted features and pose it as a
+#custom classification problem
+#TO-DO: when there are draws in the errors, which class to pick as label?
+
+#' Create a classification problem from a forecasting-processed time series dataset
+#'
+#' @param dataset A list with each element having a \code{THA_features} and a \code{errors} fields.
+#'     See \code{generate_THA_feature_dataset} and \code{process_forecast_dataset} for more information.
+#'
+#'@return \code{create_feat_classif_problem} returns a list with the entries:
+#' \describe{
+#'   \item{data}{The features extracted from the series.}
+#'   \item{errors}{The errors produced by the forecasting method.}
+#'   \item{labels}{The target classification problem, created by selecting the method that produces.
+#'       Integer from 0 to (nmethods-1).}
+#'   }
+#' @export
+create_feat_classif_problem <- function(dataset) {
+  stopifnot("features" %in% names(dataset[[1]]))
+
+  if (!("errors" %in% names(dataset[[1]])) ) {
+    return(
+      list(
+        data=t(sapply(dataset, function (lentry) {
+          feat <- as.numeric(lentry$features)
+          names(feat) <- names(lentry$features)
+          feat
+          }))
+        )
+    )
+  }
+
+  extracted <- t(sapply(dataset, function (lentry) {
+    seriesdata <- c(as.numeric(lentry$features), which.min(lentry$errors) -1,
+      lentry$errors
+      )
+    names(seriesdata) <- c( names(lentry$features), "best_method", names(lentry$errors))
+    seriesdata
+  }))
+
+  return_data <- list(data = extracted[, 1:length(dataset[[1]]$features)],
+       labels = extracted[, length(dataset[[1]]$features) +1],
+       errors = extracted[, -(1:(length(dataset[[1]]$features) +1))]
+       )
+
+  return_data
+}
+
+#' @describeIn metatemp_train Train a method-selecting ensemble that minimizes forecasting error
+#'
+#' @param data A matrix with the input features data (extracted from the series).
+#'     One observation (the features from the original series) per row.
+#' @param errors A matrix with the errors produced by each of the forecasting methods.
+#'     Each row is a vector with the errors of the forecasting methods.
+#' @param labels A numeric vector from 0 to (nclass -1) with the targe labels for classification.
+#'
+#' @export
+train_selection_ensemble <- function(data, errors, param=NULL) {
 
   check_customxgboost_version()
 
-  train_data <- create_combi_info(dataset)
+  dtrain <- xgboost::xgb.DMatrix(data)
+  attr(dtrain, "errors") <- errors
 
-  dtrain <- xgboost::xgb.DMatrix(train_data$data)
-  attr(dtrain, "ff") <- train_data$ff
-  attr(dtrain, "xx") <- train_data$xx
-  attr(dtrain, "ew") <- train_data$ew
+  if (is.null(param)) {
+    param <- list(max_depth=14, eta=0.575188, nthread = 3, silent=1,
+                  objective=error_softmax_obj,
+                  num_class=ncol(errors),
+                  subsample=0.9161483,
+                  colsample_bytree=0.7670739
+    )
+  }
 
-
-  # if (is.null(test_dataset)) {
-  #   test_dataset = dataset
-  # }
-  # test_data <- create_combi_info(test_dataset)
-  # dtest <- xgboost::xgb.DMatrix(test_data$data)
-  # attr(dtest, "ff") <- test_data$ff
-  # attr(dtest, "xx") <- test_data$xx
-  # attr(dtest, "ew") <- test_data$ew
-
-
-  param <- list(max_depth=4, eta=0.019*6, nthread = 2, silent=0,
-                objective=combi_softmax_square,
-                num_class=nrow(dataset[[1]]$ff),
-                subsample=0.9,
-                colsample_bytree=0.6)
-
-  bst <- xgboost::xgb.train(param, dtrain, 150)
+  bst <- xgboost::xgb.train(param, dtrain, 94)
   bst
 }
 
+#' @describeIn metatemp_train Produces predictions probabilities for the selection ensemble.
+#' @param model The xgboost model
+#' @param newdata The feature matrix, one row per series
+#' @export
+#' 
+#' pred <- stats::predict(meta_model, test_data$data ,outputmargin = TRUE, reshape=TRUE)
+predict_selection_ensemble <- function(model, newdata) {
+  pred <- stats::predict(model, newdata, outputmargin = TRUE, reshape=TRUE)
+  
+  pred_nonet <- pred #### #Zero out weight of Neural Net (have to adjust if NNet is not third forecast method
+  pred_nonet[,3] <- NA
+  
+  pred <- t(apply( pred, 1, softmax_transform))
+  pred_nonet[,c(1,2,4:9)] <- t(apply( pred_nonet[,c(1,2,4:9)], 1, softmax_transform))
+  
+  list(pred_full = pred, pred_nonet = pred_nonet)
+}
 
-#' Train Metalearning Models
-#' Trains a metalearning model by performing search on the hyperparameters
+### possibly to add stuff here about weighting for forecast of high limit
+#' @export
+ensemble_forecast <- function(predictions, dataset, clamp_zero=TRUE) {
+  for (i in 1:length(dataset)) {
+    weighted_ff <- as.vector(t(predictions[i,]) %*% dataset[[i]]$ff)
+    if (clamp_zero) {
+      weighted_ff[weighted_ff < 0] <- 0
+    }
+    dataset[[i]]$y_hat <- weighted_ff
+  }
+  dataset
+}
+
+ensemble_forecast_high <- function(predictions, dataset, clamp_zero=TRUE) { #### seperate function for high prediction
+  for (i in 1:length(dataset)) {
+    weighted_ff <- as.vector(t(predictions[i,c(1,2,4:9)]) %*% dataset[[i]]$ff_high[-3,])
+    if (clamp_zero) {
+      weighted_ff[weighted_ff < 0] <- 0
+    }
+    dataset[[i]]$y_hat_high <- weighted_ff
+  }
+  dataset
+}
+
+### Probably need to add stuff to here too for weighting
+
+#' @describeIn metatemp_train Analysis of the predictions
+#' @param predictions A NXM matrix with N the number of observations(time series)
+#'                    and M the number of methods.
+#' @param errors The NXM matrix with the erros per series and per method
+#' @param labels Integer vector The true labels of the would be classification problem.
+#'               Possible values are from 0 to M-1
+#' @param dataset The list with the meta information, if given additional details will be provided
+#' @param print.summary Boolean indicating wheter to print the information
 #'
+#' @export
+summary_performance <- function(predictions, dataset, print.summary = TRUE) {
+  stopifnot("xx" %in% names(dataset[[1]]))
+  if (!("errors" %in% names(dataset[[1]]))) {
+    dataset <- calc_errors(dataset)
+  }
+  labels <- sapply(dataset, function(lentry) which.min(lentry$errors) - 1)
+  max_predictions <- apply(predictions, 1, which.max) - 1
+  class_error <- 1 - mean(max_predictions == labels)
+  n_methods <- length(dataset[[1]]$errors)
+
+  #selected_error <- mean( sapply(1:nrow(errors),
+  #                               function (i) errors[i,max_predictions[i] + 1]) )
+  #oracle_error <- mean( sapply(1:nrow(errors),
+  #                             function (i) errors[i,labels[i] + 1]) )
+  #single_error <- min(colMeans(errors))
+  #average_error <- mean(errors)
+
+  #calculate the weighted prediction
+
+    for (i in 1:length(dataset)) {
+      weighted_ff <- t(predictions[i,]) %*% dataset[[i]]$ff
+      naive_combi_ff <- colMeans(dataset[[i]]$ff)
+      selected_ff <- dataset[[i]]$ff[max_predictions[i]+1,]
+      oracle_ff <- dataset[[i]]$ff[labels[i]+1,]
+      dataset[[i]]$ff <- rbind(dataset[[i]]$ff,
+                               weighted_ff,
+                               naive_combi_ff,
+                               selected_ff,
+                               oracle_ff)
+    }
+
+    dataset <- calc_errors(dataset)
+    all_errors <- sapply(dataset, function (lentry) {
+      lentry$errors})
+
+    all_errors <- rowMeans(all_errors)
+    weighted_error <- all_errors[n_methods + 1]
+    naive_weight_error  <- all_errors[n_methods + 2]
+    selected_error  <- all_errors[n_methods + 3]
+    oracle_error <-  all_errors[n_methods + 4]
+    single_error <- min(all_errors[1:n_methods])
+    average_error <- mean(all_errors[1:n_methods])
+
+
+
+  if (print.summary) {
+    print(paste("Classification error: ", round(class_error,4)))
+    print(paste("Selected OWI : ", round(selected_error,4)))
+    if (!is.null(weighted_error)) {
+      print(paste("Weighted OWI : ", round(weighted_error,4)))
+      print(paste("Naive Weighted OWI : ", round(naive_weight_error,4)))
+    }
+    print(paste("Oracle OWI: ", round(oracle_error,4)))
+    print(paste("Single method OWI: ", round(single_error,3)))
+    print(paste("Average OWI: ", round(average_error,3)))
+  }
+
+  list(selected_error = selected_error,
+       weighted_error = weighted_error)
+}
+
+
+
+
+
+
+#' Create Temporal Crossvalidated Dataset
 #'
-#' @param train_dataset A list with elements in the metalearning format.
-#' E.g. the output of a combination of \code{process_forecast_dataset} and \code{generate_THA_feature_dataset}
+#' Creates a datasets of time series for forecasting and metalearning
+#' by extracting the final observations of each series
+#'
+#' The final \code{h} observation are extrated an posed as the true future values
+#' in the entry \code{xx} of the output list. At least 7 observations are kept as the
+#' observable time series \code{x}.
+#'
+#' @param dataset A list with each element having at least the following
 #' \describe{
 #'   \item{x}{A time series object \code{ts} with the historical data.}
 #'   \item{h}{The number of required forecasts.}
-#'   \item{xx}{The number of required forecasts.}
-#'   \item{THA_features}{The number of required forecasts.}
-#'   \item{ff}{The number of required forecasts.}
-#'   \item{errors}{The number of required forecasts.}
 #' }
-#' @param eval_dataset A list in the format of \code{train_dataset}, used for evaluating the error.
-#' Can be the same as \code{train_dataset} to show training error
-#' @param obj_fun The objective loss function that the metalearning minimizes
-#' @param filename Name of the file used for saving the metalearning process
-#' @param verbose Boolean indicating whether training progress messages may be printed
 #'
-#' @return
+#' @return A list with the same structure as the input,
+#'  the following entries may be added or overwritten if existing
 #' \describe{
-#'   \item{model}{The \code{xgboost} model found by the metalearning}
-#'   \item{eval_log}{The log of hyperparametes tested with their produced errors}
+#'   \item{x}{A time series object \code{ts} with the historical data.}
+#'   \item{xx}{A time series with the true future data. Has length \code{h}
+#'   unless the remaining \code{x} would be too short.}
 #' }
-#'
 #' @export
-metatemp_train <- function(train_dataset,
-                           eval_dataset,
-                           obj_fun = c("select",
-                                       "combi:smax_abs",
-                                       "combi:smax_sq",
-                                       "combi:square"),
-                           filename = "meta_results.RData",
-                           verbose = FALSE,
-                           n.cores=3) {
+temp_holdout <- function(dataset) {
+  lapply(dataset, function(seriesentry) {
+    frq <- stats::frequency(seriesentry$x)
+    if (length(seriesentry$x) - seriesentry$h < max(2 * frq +1, 7)) {
+      length_to_keep <- max(2 * stats::frequency(seriesentry$x) +1, 7)
+      seriesentry$h <- length(seriesentry$x) - length_to_keep
+      if (seriesentry$h < 2) {
+        warning( paste( "cannot subset series by",
+                        2 - seriesentry$h,
+                        " observations, adding a mean constant") )
 
-  check_customxgboost_version()
-
-  type <- match.arg(obj_fun,
-                    choices = c("combi:smax_abs",
-                                "combi:smax_sq",
-                                "combi:square",
-                                "select"))
-  train_data <- NULL
-  dtrain <- NULL
-  objective_fun <- NULL
-
-  apply_softmax <- FALSE
-
-  if (type == "select") {
-    objective_fun <- error_softmax_obj
-    apply_softmax <- TRUE
-    train_data <- create_feat_classif_problem(train_dataset)
-    dtrain <- xgboost::xgb.DMatrix(train_data$data)
-    attr(dtrain, "errors") <- train_data$errors
-  } else {
-    if (type=="combi:smax_abs") {
-      apply_softmax = TRUE
-      objective_fun <- combi_softmax_abs
+        seriesentry$x <- stats::ts(c(seriesentry$x, rep(mean(seriesentry$x),2 - seriesentry$h )),
+                          frequency = frq)
+        seriesentry$h <- 2
+      }
     }
-    if (type=="combi:smax_sq") {
-      apply_softmax = TRUE
-      objective_fun <- combi_softmax_square
+    #note: we get first the tail, if we subset first, problems will arise (a temp variable for x should be used)
+    seriesentry$xx <- utils::tail(seriesentry$x, seriesentry$h)
+    seriesentry$x <- stats::ts( utils::head(seriesentry$x, -seriesentry$h),
+                                frequency = frq)
+    if (!is.null(seriesentry$n)) {
+      seriesentry$n <- length(seriesentry$x)
     }
-    if (type=="combi:square") {
-      apply_softmax = FALSE
-      objective_fun <- combi_forec_square_obj
-    }
-    train_data <- create_combi_info(train_dataset)
-    dtrain <- xgboost::xgb.DMatrix(train_data$data)
-    attr(dtrain, "ff") <- train_data$ff
-    attr(dtrain, "xx") <- train_data$xx
-    attr(dtrain, "ew") <- train_data$ew
-  }
-
-
-  eval_data <- create_feat_classif_problem(eval_dataset)
-
-  max_depth_grid <- c(4,6,8,10)
-  nrounds_grid <- c(20,50,100,200)
-  eta_grid <- 2*c(0.001, 0.01, 0.05, 0.1, 0.2)
-  colsample_bytree_grid <- c(0.6, 1.0)
-  subsample_grid <- c(0.6, 0.9)
-
-  params_grid <- expand.grid(max_depth_grid,
-                             nrounds_grid,
-                             eta_grid,
-                             colsample_bytree_grid,
-                             subsample_grid)
-
-  #randomize grid search
-  params_grid <- params_grid[sample(nrow(params_grid)),]
-
-  results_grid <- cbind(params_grid, -666, -666)
-  colnames(results_grid) <- c("max_depth", "nrounds",
-                              "eta", "colsample_bytree",
-                               "subsample", "selected_owi_error",
-                              "weighted_owi_error")
-
-
-
-  best_owi <- 9999999999.9
-  meta_results <- NULL
-  best_model <- NULL
-  for (i in 1:nrow(params_grid)) {
-    max_depth <- params_grid[i,1]
-    nrounds <- params_grid[i,2]
-    eta <- params_grid[i,3]
-    colsample_bytree <- params_grid[i,4]
-    subsample <- params_grid[i,5]
-
-    if (verbose)  print(paste("Training with: ",
-                "max_depth=", max_depth,
-                "nrounds=",nrounds,
-                "eta=",eta,
-                "colsample_bytree", colsample_bytree,
-                "subsample", subsample))
-
-
-    param <- list(max_depth=max_depth,
-                  eta=eta, nthread = n.cores,
-                  silent=0,
-                  objective=objective_fun,
-                  num_class=nrow(train_dataset[[1]]$ff),
-                  subsample=subsample,
-                  colsample_bytree=colsample_bytree)
-
-    bst <- xgboost::xgb.train(param, dtrain, nrounds)
-
-    preds <- stats::predict(bst, eval_data$data, outputmargin = TRUE, reshape=TRUE)
-    if (apply_softmax) {
-      preds <- t(apply( preds, 1, softmax_transform))
-    }
-    errors <- summary_performance(preds,
-                                     eval_dataset,
-                                     print.summary = verbose)
-    owi_error <- min(unlist(errors))
-    if (is.nan(owi_error)) {
-      owi_error <- 999999999.9
-    }
-    results_grid[i, (ncol(results_grid)-1):ncol(results_grid)] <- unlist(errors)
-
-    if (verbose) print(paste("Iter: ", i, " OWI: ", round(owi_error,3)))
-
-    if (owi_error < best_owi) {
-      if (verbose) print("Improved the owi!")
-      best_owi <- owi_error
-      best_model <- bst
-    }
-    meta_results <- list(model = best_model,
-                         eval_log= results_grid[1:i,])
-    save(meta_results, file=filename)
-  }
-  meta_results
+    seriesentry
+  })
 }
+
+#' @export
+forecast_meta_M4 <- function(meta_model, x, h) {
+
+  ele <- list(list(x=x, h=h))
+  ele <- THA_features(ele)
+
+  ff <- process_forecast_methods(ele[[1]], forec_methods())
+  ff <- t(sapply(ff, function (lentry) lentry$forecast))
+  rownames(ff) <- unlist(forec_methods())
+
+  preds <- predict_selection_ensemble(meta_model, as.matrix(ele[[1]]$features))
+
+  y_hat <- preds %*% ff
+
+  y_hat <- as.vector(y_hat)
+
+  #for the interval forecast we use only thetaf, naive and snaive
+  thetamod <- forecast::thetaf(x, h)
+  radius_theta <- thetamod$upper[,2] - thetamod$mean
+
+  naivemod <-forecast::naive(x, h)
+  radius_naive <- naivemod$upper[,2] - naivemod$mean
+
+  snaivemod <- forecast::snaive(x, h)
+  radius_snaive <- snaivemod$upper[,2] - snaivemod$mean
+
+  ff_radius <- rbind(radius_theta, radius_naive, radius_snaive)
+
+  radius <- rep(0, h)
+  if (h > 48) {
+    stop("Maximum forecasting horizon is 48")
+  }
+  for (i in 1:h) {
+    radius[i] <- sum(M4_interval_weights[,i] * ff_radius[,i])
+  }
+
+  upper <- as.vector(y_hat + radius)
+  lower <- as.vector(y_hat - radius)
+
+  y_hat[y_hat < 0] <- 0
+  upper[upper < 0] <- 0
+  lower[lower < 0] <- 0
+
+  list(mean=y_hat, upper=upper, lower=lower)
+}
+
+#' @export
+get_M4_interval_weights <- function() {
+  M4_interval_weights
+}
+
+#weights used for calu
+M4_interval_weights <- structure(c(1.20434805479858, 0.0349832013212199, -0.0135553803216437,
+            1.6348667017876, -0.0291391104169728, -0.137106578797595, 1.89343593467985,
+            -0.0556309211578089, -0.193624560527705, 1.97820794828226, -0.0710718154535777,
+            -0.123100424872484, 2.20852069562932, -0.0710600158690502, -0.211316149359757,
+            2.00533194439932, -0.0735768842959382, 0.00639025637846198, 1.54942520065088,
+            -0.057520179590224, 0.0192717604264258, 1.66779655654594, -0.0577404254880085,
+            -0.0301536402316914, 1.57793111309566, -0.0571366696960703, 0.00074454324835706,
+            1.58014785718421, -0.0546758191445934, 0.00023514471533616, 1.51051833028159,
+            -0.0502489429193765, 0.0306686761759747, 1.49667215498576, -0.0504760468509232,
+            0.0633292476660604, 1.46230478866238, -0.0532688561557852, 0.0966347659478812,
+            1.61065833858158, -0.0586474808085979, -0.010800707477267, 1.50576342267903,
+            -0.0520210844283552, 0.0144436883743055, 1.54921239534018, -0.053533338280372,
+            -0.0108667128746493, 1.53417971494702, -0.0579026110677012, 0.000297052007093576,
+            1.55732972883077, -0.0553048336745351, 0.0367638357882623, 0.116813998810538,
+            0.323446912667969, 0.630743390147047, 0.73284831139316, -0.0328228748038042,
+            0.614008235063802, 1.76483588802515, -0.0543503687837068, -0.0194824287225068,
+            0.40893801004056, -0.0372774403169106, 1.03983187771261, 0.874914242855032,
+            0.0520531705411014, 0.265317677176088, 1.43631066965087, -0.0197534066247038,
+            -0.173619599584651, 0.898313936819893, -0.0705817867062166, 0.325840179586548,
+            0.625354817708426, 0.0730184383944889, 0.327004041690249, 0.311911360827102,
+            -0.045054781310374, 1.04704513182606, 0.141901550600215, -0.0382311974845755,
+            1.34096763681398, 0.491822729685341, -0.0374825159401713, 0.915188301573958,
+            0.742763540929105, -0.0735719158347089, 0.906734816018297, 0.997546107480632,
+            -0.0835548323138982, 0.544652116459324, 0.687991299960411, -0.0463052425732432,
+            0.645709731320379, 0.564295324221999, -0.0634237302002972, 1.09921867894254,
+            -0.0931400534770518, -0.0191455415920918, 1.42725756848195, 0.425542670313752,
+            -0.0525723014099128, 1.11315125793807, 2.37441008580272, -0.182316365736858,
+            0.208272797333258, 1.37681109893514, -0.109037211688484, 0.322339972304184,
+            1.02158407919349, -0.0702467319013755, 0.547900910728034, 0.939473970980379,
+            -0.0831346087836634, 0.710478207012984, 0.088098458991328, -0.0279187923322283,
+            1.24491828863518, 1.03485500909627, -0.0845414892639553, 0.418196261825132,
+            0.432858831338303, -0.0486860688171931, 0.960107743238668, 0.0505708749888397,
+            -0.0195777073302953, 0.957162564794512, 0.520298978200399, 0.0250325108758569,
+            0.50637198342853, 0.502726050210653, -0.0498970101052844, 0.7843393684093,
+            1.19955393367803, -0.0995989563120128, 0.592116095974745, 0.0150399012793929,
+            -0.0310974825919329, 1.8790134248291, 1.42083348006252, -0.30878943417154,
+            1.97721144553016), .Dim = c(3L, 48L))
+
