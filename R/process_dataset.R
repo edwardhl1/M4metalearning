@@ -70,7 +70,7 @@ calc_errors <- function(dataset) {
 
     #extrac forecasts and attach the snaive for completion
     ff <- lentry$ff
-    ff <- rbind(ff, snaive_forec(insample, lentry$h))
+    ff <- rbind(ff, snaive_forec(insample, lentry$h)[[1]]) ###
 
     frq <- frq <- stats::frequency(insample)
     insample <- as.numeric(insample)
@@ -91,7 +91,7 @@ calc_errors <- function(dataset) {
 
     lentry$mase_err <- mase_err[-nrow(mase_err),]
     lentry$smape_err <- smape_err[-nrow(smape_err),]
-    dataset[[i]] <- lentry
+      dataset[[i]] <- lentry
     total_snaive_errors <- total_snaive_errors + c(mean(lentry$snaive_mase),
                                                    mean(lentry$snaive_smape))
     } , error = function (e) {
@@ -135,8 +135,8 @@ calc_errors <- function(dataset) {
 
 
 #calculate forecast predictions
-calculate_forecast_preds <- function(insample, h, forec.method) {
-  forec.method(x=insample, h=h)
+calculate_forecast_preds <- function(insample, h, level = 55, forec.method) { ###
+  forec.method(x=insample, h=h, level = level) ###
 }
 
 
@@ -163,7 +163,7 @@ process_forecast_methods <- function(seriesdata, methods_list) {
   lapply(methods_list, function (mentry) {
     method_name <- mentry
     method_fun <- get(mentry)
-    forecasts <- tryCatch( method_fun(x=seriesdata$x, h=seriesdata$h),
+    forecasts <- tryCatch( method_fun(x=seriesdata$x, h=seriesdata$h, level=55), ###
                            error=function(error) {
                              print(error)
                              print(paste("ERROR processing series: ", seriesdata$st))
@@ -172,7 +172,7 @@ process_forecast_methods <- function(seriesdata, methods_list) {
                              print("Returning snaive forecasts instead")
                              snaive_forec(seriesdata$x, seriesdata$h)
                            })
-    list( forecasts=forecasts, method_name=method_name)
+    list( forecasts=forecasts[[1]], high = forecasts[[2]], method_name=method_name) ###
   })
 }
 
@@ -250,10 +250,13 @@ calc_forecasts <- function(dataset, methods, n.cores=1) {
 
   ret_list <- list_process_fun(dataset, function (seriesdata) {
     results <- process_forecast_methods(seriesdata, methods)
-    ff <- t(sapply(results, function (resentry) resentry$forecasts))
+    ff <- t(sapply(results, function (resentry) resentry$forecasts))    ###
+    ff_high <- t(sapply(results, function (resentry) resentry$high)) ###
     method_names <- sapply(results, function (resentry) resentry$method_name)
     row.names(ff) <- method_names
+    row.names(ff_high) <- method_names   ###
     seriesdata$ff <- ff
+    seriesdata$ff_high <- ff_high
     seriesdata
   })
 
@@ -263,4 +266,6 @@ calc_forecasts <- function(dataset, methods, n.cores=1) {
 
   ret_list
 }
+
+
 
