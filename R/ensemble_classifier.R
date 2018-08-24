@@ -152,6 +152,8 @@ ensemble_forecast <- function(predictions, dataset, clamp_zero=TRUE) {
   dataset
 }
 
+### Added comment code to try to get new function to run
+#' @export
 ensemble_forecast_high <- function(predictions, dataset, clamp_zero=TRUE) { #### seperate function for high prediction
   for (i in 1:length(dataset)) {
     weighted_ff <- as.vector(t(predictions[i,c(1,2,4:9)]) %*% dataset[[i]]$ff_high[-3,])
