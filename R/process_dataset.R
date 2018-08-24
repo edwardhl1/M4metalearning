@@ -163,14 +163,14 @@ process_forecast_methods <- function(seriesdata, methods_list) {
   lapply(methods_list, function (mentry) {
     method_name <- mentry
     method_fun <- get(mentry)
-    forecasts <- tryCatch( method_fun(x=seriesdata$x, h=seriesdata$h, level=55), ###
+    forecasts <- tryCatch( method_fun(x=seriesdata$x, h=seriesdata$h, level=seriesdata$level), ###
                            error=function(error) {
                              print(error)
                              print(paste("ERROR processing series: ", seriesdata$st))
                              print(paste("The forecast method that produced the error is:",
                                          method_name))
                              print("Returning snaive forecasts instead")
-                             snaive_forec(seriesdata$x, seriesdata$h)
+                             snaive_forec(seriesdata$x, seriesdata$h, seriesdata$level)
                            })
     list( forecasts=forecasts[[1]], high = forecasts[[2]], method_name=method_name) ###
   })
