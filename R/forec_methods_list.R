@@ -47,7 +47,7 @@ naive_forec <- function(x, h, level = 55) {
 #' @describeIn forec_methods forecast::auto.arima
 #' @export
 auto_arima_forec <- function(x, h, level = 55) {
-  model <- forecast::auto.arima(x, stepwise=FALSE, approximation=FALSE)
+  model <- forecast::auto.arima(x, stepwise=TRUE, approximation=FALSE)
   fore <- forecast::forecast(model, h=h, level=level)
   list(fore$mean, fore$upper[,1])
 }
