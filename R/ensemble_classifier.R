@@ -184,9 +184,27 @@ predict_selection_ensemble_full <- function(model, newdata_feat, dataset, clamp_
     }
     dataset[[i]]$y_hat <- weighted_ff
     dataset[[i]]$y_hat_high <- weighted_ff_high
+    dataset[[i]]$top_forecast <- row.names(dataset[[i]]$ff)[which.max(pred[i,])]
   }
   dataset
 }
+
+
+
+find_accuracy <- function(dataset){
+      lapply(dataset, function(seriesentry) {
+        frq <- stats::frequency(seriesentry$x)
+        train <- head(seriesentry$x, length(seriesentry$x) - frq)
+        test <- tail(seriesentry$x, frq)
+        func <- seriesentry$top_forecast
+        mod <- suppressWarnings(get(func)(train, h = frq)[[1]])
+        metrics <- round(forecast::accuracy(f = mod, x = test),3)[, c("ME","MAE","MPE","MAPE")]
+        seriesentry$acc <- metrics
+        
+    seriesentry
+  })
+}
+
 ### Probably need to add stuff to here too for weighting
 
 #' @describeIn metatemp_train Analysis of the predictions
@@ -404,4 +422,3 @@ M4_interval_weights <- structure(c(1.20434805479858, 0.0349832013212199, -0.0135
             1.19955393367803, -0.0995989563120128, 0.592116095974745, 0.0150399012793929,
             -0.0310974825919329, 1.8790134248291, 1.42083348006252, -0.30878943417154,
             1.97721144553016), .Dim = c(3L, 48L))
-
