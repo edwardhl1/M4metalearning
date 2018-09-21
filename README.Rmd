@@ -18,6 +18,10 @@ options(knitr.duplicate.label = 'allow')
  file.rename("vignettes/metalearning_example.md", "docs/metalearning_example.md")
 
 ```
+#### This is a continuation of work that was created by Pablo Montero-Manso, Thiyanga Talagala, Rob J Hyndman and George Athanasopoulos for the M4 competition. This fork allows the user to create upper limit prediction intervals as well as generate general accuracy measurments for specific lanes.
+
+
+
 
 This page contains the explanation of our forecast method for the M4 competition, authored by Pablo Montero-Manso, Thiyanga Talagala, Rob J Hyndman and George Athanasopoulos.
 
