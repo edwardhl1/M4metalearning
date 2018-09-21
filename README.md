@@ -1,5 +1,10 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
+
+### This is a continuation of work that was created by Pablo Montero-Manso, Thiyanga Talagala, Rob J Hyndman and George Athanasopoulos for the M4 competition. This fork allows the user to create upper limit prediction intervals as well as generate general accuracy measurments for specific lanes.
+
+
+
 This page contains the explanation of our forecast method for the M4 competition, authored by Pablo Montero-Manso, Thiyanga Talagala, Rob J Hyndman and George Athanasopoulos.
 
 As part of our submission, we are producing the R package `M4metalearning`, see instalation instructions below. This package is intended to facilitate reproducing the results of our submission, but can also the used on its own to apply our approach to other datasets, either using the pretrained model submitted to the M4 competition or by training new models.
