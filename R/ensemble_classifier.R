@@ -194,7 +194,7 @@ predict_selection_ensemble_full <- function(model, newdata_feat, dataset, clamp_
 find_accuracy <- function(dataset){
         lapply(dataset, function(seriesentry) {
         frq <- stats::frequency(seriesentry$x)
-        if(length(seriesentry$x) < 36){
+        if(length(seriesentry$x) <= 36){
           seriesentry$acc <- c("ME" = NA,"MAE" = NA,"MPE" = NA ,"MAPE" = NA)
         }else{
         train <- head(seriesentry$x, length(seriesentry$x) - frq)
