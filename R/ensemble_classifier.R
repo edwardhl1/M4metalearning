@@ -192,19 +192,22 @@ predict_selection_ensemble_full <- function(model, newdata_feat, dataset, clamp_
 
 
 find_accuracy <- function(dataset){
-        lapply(dataset, function(seriesentry) {
-        frq <- stats::frequency(seriesentry$x)
-        if(length(seriesentry$x) <= 36){
-          seriesentry$acc <- c("ME" = NA,"MAE" = NA,"MPE" = NA ,"MAPE" = NA)
-        }else{
-        train <- head(seriesentry$x, length(seriesentry$x) - frq)
-        test <- tail(seriesentry$x, frq)
-        func <- seriesentry$top_forecast
-        mod <- suppressWarnings(get(func)(train, h = frq)[[1]])
-        metrics <- round(forecast::accuracy(f = mod, x = test),3)[, c("ME","MAE","MPE","MAPE")]
-        seriesentry$acc <- metrics
-        }
+  lapply(dataset, function(seriesentry) {
+      frq <- stats::frequency(seriesentry$x)
+      train <- head(seriesentry$x, length(seriesentry$x) - frq)
+      test <- tail(seriesentry$x, frq)
+      func <- seriesentry$top_forecast
+      mod <- tryCatch( suppressWarnings(get(func)(train, h = frq)[[1]]), ###
+                                    error=function(error) {
+                                     forecast::auto.arima(train, d=0,D=0) 
+                                    })
+        
+        
+      metrics <- round(forecast::accuracy(f = mod, x = test),3)[, c("ME","MAE","MPE","MAPE")]
+      seriesentry$acc <- metrics
+    
     seriesentry
+
   })
 }
 
