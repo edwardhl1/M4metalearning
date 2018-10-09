@@ -199,7 +199,7 @@ find_accuracy<- function(dataset){
     func <- seriesentry$top_forecast
     mod <- tryCatch( suppressWarnings(get(func)(train, h = frq)[[1]]), ###
                      error=function(error) {
-                       snaive_forec(train, freq, seriesentry$level)[[1]] 
+                       snaive_forec(train, frq, seriesentry$level)[[1]] 
                      })
     
     
