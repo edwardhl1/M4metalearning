@@ -46,9 +46,15 @@ naive_forec <- function(x, h, level = 55) {
 
 #' @describeIn forec_methods forecast::auto.arima
 #' @export
+
 auto_arima_forec <- function(x, h, level = 55) {
   model <- forecast::auto.arima(x, stepwise=TRUE, approximation=FALSE)
   fore <- forecast::forecast(model, h=h, level=level)
+  # Added "flag" to remove non-stationary/volatile time series
+  if(model$arma[6]+model$arma[7] >= 3){
+    fore$mean <- rep(0, h)
+    fore$upper[,1] <- rep(0, h)
+  }
   list(fore$mean, fore$upper[,1])
 }
 
