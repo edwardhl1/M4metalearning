@@ -130,13 +130,13 @@ train_selection_ensemble <- function(data, errors, param=NULL) {
 predict_selection_ensemble <- function(model, newdata) {
   pred <- stats::predict(model, newdata, outputmargin = TRUE, reshape=TRUE)
   
-  pred_nonet <- pred #### #Zero out weight of Neural Net (have to adjust if NNet is not third forecast method
-  pred_nonet[,3] <- NA
+  #pred_nonet <- pred #### #Zero out weight of Neural Net (have to adjust if NNet is not third forecast method
+  #pred_nonet[,3] <- NA
   
   pred <- t(apply( pred, 1, softmax_transform))
-  pred_nonet[,c(1,2,4:9)] <- t(apply( pred_nonet[,c(1,2,4:9)], 1, softmax_transform))
+  #pred_nonet[,c(1,2,4:9)] <- t(apply( pred_nonet[,c(1,2,4:9)], 1, softmax_transform))
   
-  list(pred_full = pred, pred_nonet = pred_nonet)
+  list(pred_full = pred)#, pred_nonet = pred_nonet)
 }
 
 ### possibly to add stuff here about weighting for forecast of high limit
@@ -156,7 +156,7 @@ ensemble_forecast <- function(predictions, dataset, clamp_zero=TRUE) {
 #' @export
 ensemble_forecast_high <- function(predictions, dataset, clamp_zero=TRUE) { #### seperate function for high prediction
   for (i in 1:length(dataset)) {
-    weighted_ff <- as.vector(t(predictions[i,c(1,2,4:9)]) %*% dataset[[i]]$ff_high[-3,])
+    weighted_ff <- as.vector(t(predictions[i,]) %*% dataset[[i]]$ff_high)
     if (clamp_zero) {
       weighted_ff[weighted_ff < 0] <- 0
     }
@@ -168,16 +168,16 @@ ensemble_forecast_high <- function(predictions, dataset, clamp_zero=TRUE) { ####
 predict_selection_ensemble_full <- function(model, newdata_feat, dataset, clamp_zero=TRUE) {
   pred <- stats::predict(model, newdata_feat, outputmargin = TRUE, reshape=TRUE)
   
-  pred_nonet <- pred #### #Zero out weight of Neural Net (have to adjust if NNet is not third forecast method
-  pred_nonet[,3] <- NA
+  #pred_nonet <- pred #### #Zero out weight of Neural Net (have to adjust if NNet is not third forecast method
+  #pred_nonet[,3] <- NA
   
   pred <- t(apply( pred, 1, softmax_transform))
-  pred_nonet[,c(1,2,4:9)] <- t(apply( pred_nonet[,c(1,2,4:9)], 1, softmax_transform))
+  #pred_nonet[,c(1,2,4:9)] <- t(apply( pred_nonet[,c(1,2,4:9)], 1, softmax_transform))
   
   #list(pred_full = pred, pred_nonet = pred_nonet)
   for (i in 1:length(dataset)) {
     weighted_ff <- as.vector(t(pred[i,]) %*% dataset[[i]]$ff)
-    weighted_ff_high <- as.vector(t(pred_nonet[i,c(1,2,4:9)]) %*% dataset[[i]]$ff_high[-3,])
+    weighted_ff_high <- as.vector(t(pred[i,]) %*% dataset[[i]]$ff_high)
     if (clamp_zero) {
       weighted_ff[weighted_ff < 0] <- 0
       weighted_ff_high[weighted_ff_high < 0] <- 0
