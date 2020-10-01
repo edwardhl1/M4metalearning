@@ -136,7 +136,7 @@ predict_selection_ensemble <- function(model, newdata) {
   pred <- t(apply( pred, 1, softmax_transform))
   #pred_nonet[,c(1,2,4:9)] <- t(apply( pred_nonet[,c(1,2,4:9)], 1, softmax_transform))
   
-  list(pred_full = pred)#, pred_nonet = pred_nonet)
+  list(pred_full = pred, pred_nonet = pred)
 }
 
 ### possibly to add stuff here about weighting for forecast of high limit
