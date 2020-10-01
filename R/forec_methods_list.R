@@ -68,11 +68,11 @@ ets_forec <- function(x, h, level = 55) {
 
 #' @describeIn forec_methods forecast::nnetar
 #' @export
-#nnetar_forec <- function(x, h, level = 55) {
-#  model <- forecast::nnetar(x)
-#  fore <- forecast::forecast(model, h=h)$mean
-#  list(fore, c(rep(NA,h))) #Create empty list of high level estimates to avoid high computation time of nnetar
-#}
+nnetar_forec <- function(x, h, level = 55) {
+  model <- forecast::nnetar(x)
+  fore <- forecast::forecast(model, h=h)$mean
+  list(fore, c(rep(NA,h))) #Create empty list of high level estimates to avoid high computation time of nnetar
+}
 
 #' @describeIn forec_methods forecast::tbats
 #' @export
